@@ -6,6 +6,12 @@ from collections.abc import Mapping
 import logging
 import binascii
 
+try:
+    import canmatrix
+except ImportError:
+    # This is an optional dependency used only for specific functionality
+    pass
+
 from canopen.sdo import SdoAbortedError
 from canopen import objectdictionary
 from canopen import variable
@@ -92,17 +98,14 @@ class PdoBase(Mapping):
         :rtype: canmatrix.canmatrix.CanMatrix
         """
         try:
-            from canmatrix import canmatrix
-            from canmatrix import formats
-        except ImportError:
+            db = canmatrix.canmatrix.CanMatrix()
+        except NameError:
             raise NotImplementedError("This feature requires the 'canopen[db_export]' feature")
 
-        db = canmatrix.CanMatrix()
         for pdo_map in self.map.values():
             if pdo_map.cob_id is None:
                 continue
-            frame = canmatrix.Frame(pdo_map.name,
-                                    arbitration_id=pdo_map.cob_id)
+            frame = canmatrix.canmatrix.Frame(pdo_map.name, arbitration_id=pdo_map.cob_id)
             for var in pdo_map.map:
                 is_signed = var.od.data_type in objectdictionary.SIGNED_TYPES
                 is_float = var.od.data_type in objectdictionary.FLOAT_TYPES
@@ -115,21 +118,23 @@ class PdoBase(Mapping):
                 name = var.name
                 name = name.replace(" ", "_")
                 name = name.replace(".", "_")
-                signal = canmatrix.Signal(name,
-                                          start_bit=var.offset,
-                                          size=var.length,
-                                          is_signed=is_signed,
-                                          is_float=is_float,
-                                          factor=var.od.factor,
-                                          min=min_value,
-                                          max=max_value,
-                                          unit=var.od.unit)
+                signal = canmatrix.canmatrix.Signal(
+                    name,
+                    start_bit=var.offset,
+                    size=var.length,
+                    is_signed=is_signed,
+                    is_float=is_float,
+                    factor=var.od.factor,
+                    min=min_value,
+                    max=max_value,
+                    unit=var.od.unit,
+                )
                 for value, desc in var.od.value_descriptions.items():
                     signal.addValues(value, desc)
                 frame.add_signal(signal)
             frame.calc_dlc()
             db.add_frame(frame)
-        formats.dumpp({"": db}, filename)
+        canmatrix.formats.dumpp({"": db}, filename)
         return db
 
     def stop(self):

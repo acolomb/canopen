@@ -1,6 +1,13 @@
 import os.path
 import unittest
+
 import canopen
+
+try:
+    import canmatrix
+except ImportError:
+    # This is an optional dependency used only for specific functionality
+    pass
 
 EDS_PATH = os.path.join(os.path.dirname(__file__), 'sample.eds')
 
@@ -65,11 +72,12 @@ class TestPDO(unittest.TestCase):
         self.node.rpdo.save()
 
     def test_pdo_export(self):
-        import tempfile
         try:
-            import canmatrix
+            _ = canmatrix.canmatrix
         except ImportError:
             raise unittest.SkipTest("The PDO export API requires canmatrix")
+
+        import tempfile
 
         for pdo in "tpdo", "rpdo":
             with tempfile.NamedTemporaryFile(suffix=".csv") as tmp:

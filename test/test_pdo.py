@@ -50,7 +50,7 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(node.tpdo[1]['BOOLEAN value 2'].raw, True)
 
         # Test different types of access
-        self.assertEqual(node.pdo[0x1600]['INTEGER16 value'].raw, -3)
+        self.assertEqual(node.pdo[0x1A00]['INTEGER16 value'].raw, -3)
         self.assertEqual(node.pdo['INTEGER16 value'].raw, -3)
         self.assertEqual(node.pdo.tx[1]['INTEGER16 value'].raw, -3)
         self.assertEqual(node.pdo[0x2001].raw, -3)
@@ -58,7 +58,7 @@ class TestPDO(unittest.TestCase):
         self.assertEqual(node.pdo[0x2002].raw, 0xf)
         self.assertEqual(node.pdo['0x2002'].raw, 0xf)
         self.assertEqual(node.tpdo[0x2002].raw, 0xf)
-        self.assertEqual(node.pdo[0x1600][0x2002].raw, 0xf)
+        self.assertEqual(node.pdo[0x1A00][0x2002].raw, 0xf)
 
     def test_pdo_save(self):
         self.node.tpdo.save()

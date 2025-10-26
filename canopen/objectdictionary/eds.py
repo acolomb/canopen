@@ -12,6 +12,7 @@ from canopen.objectdictionary import (
     ODVariable,
     ObjectDictionary,
     datatypes,
+    objectcodes,
 )
 from canopen.sdo import SdoClient
 
@@ -20,13 +21,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-# Object type. Don't confuse with Data type
-DOMAIN = 2
-VAR = 7
-ARR = 8
-RECORD = 9
-
 
 def import_eds(source, node_id):
     eds = RawConfigParser(inline_comment_prefixes=(';',))
@@ -128,16 +122,16 @@ def import_eds(source, node_id):
                 # DS306 4.6.3.2 object description
                 # If the keyword ObjectType is missing, this is regarded as
                 # "ObjectType=0x7" (=VAR).
-                object_type = VAR
+                object_type = objectcodes.VAR
             try:
                 storage_location = eds.get(section, "StorageLocation")
             except NoOptionError:
                 storage_location = None
 
-            if object_type in (VAR, DOMAIN):
+            if object_type in (objectcodes.VAR, objectcodes.DOMAIN):
                 var = build_variable(eds, section, node_id, index)
                 od.add_object(var)
-            elif object_type == ARR and eds.has_option(section, "CompactSubObj"):
+            elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
                 last_subindex = ODVariable(
                     "Number of entries", index, 0)
@@ -146,11 +140,11 @@ def import_eds(source, node_id):
                 arr.add_member(build_variable(eds, section, node_id, index, 1))
                 arr.storage_location = storage_location
                 od.add_object(arr)
-            elif object_type == ARR:
+            elif object_type == objectcodes.ARRAY:
                 arr = ODArray(name, index)
                 arr.storage_location = storage_location
                 od.add_object(arr)
-            elif object_type == RECORD:
+            elif object_type == objectcodes.RECORD:
                 record = ODRecord(name, index)
                 record.storage_location = storage_location
                 od.add_object(record)
@@ -376,7 +370,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
             section = f"{var.index:04X}sub{var.subindex:X}"
 
         export_common(var, eds, section)
-        eds.set(section, "ObjectType", f"0x{VAR:X}")
+        eds.set(section, "ObjectType", f"0x{objectcodes.VAR:X}")
         if var.data_type:
             eds.set(section, "DataType", f"0x{var.data_type:04X}")
         if var.access_type:
@@ -414,7 +408,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         section = f"{var.index:04X}"
         export_common(var, eds, section)
         eds.set(section, "SubNumber", f"0x{len(var.subindices):X}")
-        ot = RECORD if isinstance(var, ODRecord) else ARR
+        ot = objectcodes.RECORD if isinstance(var, ODRecord) else objectcodes.ARRAY
         eds.set(section, "ObjectType", f"0x{ot:X}")
         for i in var:
             export_variable(var[i], eds)

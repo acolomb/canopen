@@ -6,8 +6,13 @@ import re
 from configparser import NoOptionError, NoSectionError, RawConfigParser
 from typing import TYPE_CHECKING
 
-from canopen import objectdictionary
-from canopen.objectdictionary import ObjectDictionary, datatypes
+from canopen.objectdictionary import (
+    ODArray,
+    ODRecord,
+    ODVariable,
+    ObjectDictionary,
+    datatypes,
+)
 from canopen.sdo import SdoClient
 
 if TYPE_CHECKING:
@@ -107,7 +112,7 @@ def import_eds(source, node_id):
             for i in range(1, 8):
                 key = f"Dummy{i:04d}"
                 if eds.getint(section, key) == 1:
-                    var = objectdictionary.ODVariable(key, i, 0)
+                    var = ODVariable(key, i, 0)
                     var.data_type = i
                     var.access_type = "const"
                     od.add_object(var)
@@ -133,8 +138,8 @@ def import_eds(source, node_id):
                 var = build_variable(eds, section, node_id, index)
                 od.add_object(var)
             elif object_type == ARR and eds.has_option(section, "CompactSubObj"):
-                arr = objectdictionary.ODArray(name, index)
-                last_subindex = objectdictionary.ODVariable(
+                arr = ODArray(name, index)
+                last_subindex = ODVariable(
                     "Number of entries", index, 0)
                 last_subindex.data_type = datatypes.UNSIGNED8
                 arr.add_member(last_subindex)
@@ -142,11 +147,11 @@ def import_eds(source, node_id):
                 arr.storage_location = storage_location
                 od.add_object(arr)
             elif object_type == ARR:
-                arr = objectdictionary.ODArray(name, index)
+                arr = ODArray(name, index)
                 arr.storage_location = storage_location
                 od.add_object(arr)
             elif object_type == RECORD:
-                record = objectdictionary.ODRecord(name, index)
+                record = ODRecord(name, index)
                 record.storage_location = storage_location
                 od.add_object(record)
 
@@ -158,8 +163,7 @@ def import_eds(source, node_id):
             index = int(match.group(1), 16)
             subindex = int(match.group(2), 16)
             entry = od[index]
-            if isinstance(entry, (objectdictionary.ODRecord,
-                                  objectdictionary.ODArray)):
+            if isinstance(entry, (ODRecord, ODArray)):
                 var = build_variable(eds, section, node_id, index, subindex)
                 entry.add_member(var)
 
@@ -263,7 +267,7 @@ def build_variable(eds, section, node_id, index, subindex=0):
     :param subindex: Subindex of the CANOpen object (if presente, else 0)
     """
     name = eds.get(section, "ParameterName")
-    var = objectdictionary.ODVariable(name, index, subindex)
+    var = ODVariable(name, index, subindex)
     try:
         var.storage_location = eds.get(section, "StorageLocation")
     except NoOptionError:
@@ -350,11 +354,11 @@ def export_dcf(od, dest=None, fileInfo={}):
 
 def export_eds(od, dest=None, file_info={}, device_commisioning=False):
     def export_object(obj, eds):
-        if isinstance(obj, objectdictionary.ODVariable):
+        if isinstance(obj, ODVariable):
             return export_variable(obj, eds)
-        if isinstance(obj, objectdictionary.ODRecord):
+        if isinstance(obj, ODRecord):
             return export_record(obj, eds)
-        if isinstance(obj, objectdictionary.ODArray):
+        if isinstance(obj, ODArray):
             return export_array(obj, eds)
 
     def export_common(var, eds, section):
@@ -410,7 +414,7 @@ def export_eds(od, dest=None, file_info={}, device_commisioning=False):
         section = f"{var.index:04X}"
         export_common(var, eds, section)
         eds.set(section, "SubNumber", f"0x{len(var.subindices):X}")
-        ot = RECORD if isinstance(var, objectdictionary.ODRecord) else ARR
+        ot = RECORD if isinstance(var, ODRecord) else ARR
         eds.set(section, "ObjectType", f"0x{ot:X}")
         for i in var:
             export_variable(var[i], eds)

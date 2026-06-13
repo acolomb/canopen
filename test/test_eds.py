@@ -2,6 +2,7 @@ import io
 import os
 import unittest
 from configparser import RawConfigParser
+from unittest.mock import Mock
 
 import canopen
 from canopen.objectdictionary.eds import _signed_int_from_hex, build_variable
@@ -186,9 +187,12 @@ class TestEDS(unittest.TestCase):
                 eds.clear()
                 eds.read(DATATYPES_EDS)
                 eds[index][option] = value
-                with self.assertLogs(level="WARN") as cm:
-                    build_variable(eds, index, node_id=42, object_type=7, index=int(index, 16))
-                self.assertRegex(cm.output[0], option)
+                error_handler = Mock()
+                build_variable(
+                    eds, index, error_handler, node_id=42, object_type=7, index=int(index, 16)
+                )
+                error_handler.assert_called_once()
+                self.assertRegex(error_handler.call_args[0][0], option)
 
     def test_array_compact_subobj(self):
         array = self.od[0x1003]

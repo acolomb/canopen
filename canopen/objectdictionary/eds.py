@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import logging
 import re
+from collections.abc import Callable
 from configparser import NoOptionError, NoSectionError, RawConfigParser
 from typing import Any, TYPE_CHECKING
 
@@ -142,14 +143,16 @@ def import_eds(source, node_id, strict: bool = False) -> ObjectDictionary:
                 storage_location = None
 
             if object_type in (objectcodes.VAR, objectcodes.DOMAIN):
-                var = build_variable(eds, section, node_id, object_type, index)
+                var = build_variable(eds, section, _err, node_id, object_type, index)
                 od.add_object(var)
             elif object_type == objectcodes.ARRAY and eds.has_option(section, "CompactSubObj"):
                 arr = ODArray(name, index)
                 last_subindex = ODVariable("Number of entries", index, 0)
                 last_subindex.data_type = datatypes.UNSIGNED8
                 arr.add_member(last_subindex)
-                arr.add_member(build_variable(eds, section, node_id, object_type, index, 1))
+                arr.add_member(
+                    build_variable(eds, section, _err, node_id, object_type, index, 1)
+                )
                 arr.storage_location = storage_location
                 arr.custom_options = _get_custom_options(eds, section)
                 od.add_object(arr)
@@ -175,7 +178,7 @@ def import_eds(source, node_id, strict: bool = False) -> ObjectDictionary:
                     object_type = int(eds.get(section, "ObjectType"), 0)
                 except NoOptionError:
                     object_type = objectcodes.VAR
-                var = build_variable(eds, section, node_id, object_type, index, subindex)
+                var = build_variable(eds, section, _err, node_id, object_type, index, subindex)
                 entry.add_member(var)
 
         # Match [index]Name
@@ -309,6 +312,7 @@ def _get_custom_options(eds: RawConfigParser, section: str) -> dict[str, str]:
 def build_variable(
     eds: RawConfigParser,
     section: str,
+    err: Callable[..., None],
     node_id: int,
     object_type: int,
     index: int,
@@ -318,6 +322,7 @@ def build_variable(
 
     :param eds: String stream of the eds file
     :param section: EDS file section corresponding to the object
+    :param err: Appropriate error handling function for parse errors
     :param node_id: Node ID
     :param index: Index of the CANOpen object
     :param subindex: Subindex of the CANOpen object (if present, else 0)
@@ -341,9 +346,7 @@ def build_variable(
         try:
             var.data_type = int(eds.get(f"{var.data_type:X}sub1", "DefaultValue"), 0)
         except NoSectionError:
-            logger.warning(
-                "%s has an unknown or unsupported data type (0x%X)", name, var.data_type
-            )
+            err("%s has an unknown or unsupported data type (0x%X)", name, var.data_type)
             # Assume DOMAIN to force application to interpret the byte data
             var.data_type = datatypes.DOMAIN
 
@@ -356,9 +359,7 @@ def build_variable(
             else:
                 var.min = int(raw_string, 0)
         except ValueError:
-            logger.warning(
-                "Invalid LowLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index
-            )
+            err("Invalid LowLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index)
     if (raw_string := eds.get(section, "HighLimit", fallback=None)) is not None:
         try:
             if var.data_type in datatypes.SIGNED_TYPES:
@@ -366,9 +367,7 @@ def build_variable(
             else:
                 var.max = int(raw_string, 0)
         except ValueError:
-            logger.warning(
-                "Invalid HighLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index
-            )
+            err("Invalid HighLimit %r for %s (0x%X), ignoring", raw_string, var.name, var.index)
     if (raw_string := eds.get(section, "DefaultValue", fallback=None)) is not None:
         var.default_raw = raw_string  # type: ignore[attr-defined] # custom round-trip addition
         try:
@@ -376,18 +375,22 @@ def build_variable(
                 var.relative = True
             var.default = _decode_from_eds(node_id, var.data_type, raw_string)
         except ValueError:
-            logger.warning(
+            err(
                 "Invalid DefaultValue %r for %s (0x%X), ignoring",
-                raw_string, var.name, var.index,
+                raw_string,
+                var.name,
+                var.index,
             )
     if (raw_string := eds.get(section, "ParameterValue", fallback=None)) is not None:
         var.value_raw = raw_string  # type: ignore[attr-defined] # custom round-trip addition
         try:
             var.value = _decode_from_eds(node_id, var.data_type, raw_string)
         except ValueError:
-            logger.warning(
+            err(
                 "Invalid ParameterValue %r for %s (0x%X), ignoring",
-                raw_string, var.name, var.index,
+                raw_string,
+                var.name,
+                var.index,
             )
     # Factor, Description and Unit are not standard according to the CANopen specifications, but
     # they are implemented in the python canopen package, so we can at least try to use them
@@ -395,8 +398,11 @@ def build_variable(
         try:
             var.factor = float(raw_string)
         except ValueError:
-            logger.warning(
-                "Invalid Factor %r for %s (0x%X), ignoring", raw_string, var.name, var.index
+            err(
+                "Invalid Factor %r for %s (0x%X), ignoring",
+                raw_string,
+                var.name,
+                var.index,
             )
     if (raw_string := eds.get(section, "Description", fallback=None)) is not None:
         var.description = raw_string

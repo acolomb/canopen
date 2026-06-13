@@ -23,7 +23,22 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def import_eds(source, node_id):
+def import_eds(source, node_id, strict: bool = False) -> ObjectDictionary:
+    """Create an ObjectDictionary from parsing the EDS file.
+
+    :param source: File-like object or path to read from
+    :param node_id: Assumed node ID for interpolating values depending on it
+    :param strict: Abort on parsing errors, instead of just logging them
+    :return: The ready-to-use ObjectDictionary
+    :raises RuntimeError: On parse errors, only if strict=True was passed
+    """
+
+    def _err(msg: str, *args):
+        if strict:
+            raise RuntimeError(msg, *args)
+        else:
+            logger.warning(msg, *args)
+
     eds = RawConfigParser(inline_comment_prefixes=(';',))
     eds.optionxform = lambda optionstr: str(optionstr)  # type: ignore[method-assign]
     opened_here = False
@@ -55,7 +70,7 @@ def import_eds(source, node_id):
         ])
 
     if not eds.has_section("DeviceInfo"):
-        logger.warn("eds file does not have a DeviceInfo section. This section is mandatory")
+        _err("eds file does not have a DeviceInfo section. This section is mandatory")
     else:
         for rate in [10, 20, 50, 125, 250, 500, 800, 1000]:
             baudPossible = int(
